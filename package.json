@@ -1,6 +1,6 @@
 {
   "name": "@wgb5445/npm-release-playground",
-  "version": "0.0.1",
+  "version": "0.0.2-beta.1",
   "private": false,
   "description": "Playground repo for guarded npm release workflow",
   "repository": {

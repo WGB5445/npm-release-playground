@@ -5,7 +5,7 @@
   "description": "Playground repo for guarded npm release workflow",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wgb5445/npm-release-playground.git"
+    "url": "https://github.com/WGB5445/npm-release-playground"
   },
   "scripts": {
     "build": "echo build-ok",

@@ -1,0 +1,137 @@
+name: Release Playground
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to release from (default main)
+        required: false
+        default: main
+        type: string
+      dry_run:
+        description: Run dry-run instead of real publish
+        required: false
+        default: true
+        type: boolean
+      confirm_publish:
+        description: For real manual publish, must be exactly publish
+        required: false
+        default: ""
+        type: string
+      confirm_version:
+        description: For real manual publish, must equal package version
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      dist_tag: ${{ steps.release.outputs.dist_tag }}
+      package_name: ${{ steps.release.outputs.package_name }}
+      expected_tag: ${{ steps.expected.outputs.expected_tag }}
+      dry_run: ${{ steps.flags.outputs.dry_run }}
+      require_manual_confirm: ${{ steps.flags.outputs.require_manual_confirm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+          run_install: false
+
+      - name: Compute flags
+        id: flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "dry_run=${{ inputs.dry_run }}" >> "$GITHUB_OUTPUT"
+            if [[ "${{ inputs.dry_run }}" == "false" ]]; then
+              echo "require_manual_confirm=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "require_manual_confirm=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "require_manual_confirm=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute expected tag
+        id: expected
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "expected_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "expected_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: release
+        uses: WGB5445/guarded-npm-release-action@v1
+        with:
+          package_dir: .
+          publish_mode: ${{ steps.flags.outputs.dry_run == 'true' && 'dry-run' || 'preflight' }}
+          expected_tag: ${{ steps.expected.outputs.expected_tag }}
+          allow_tag_prefix_v: 'true'
+          allow_non_main: 'false'
+          main_branch: main
+          run_tests: 'true'
+          check_version_exists: ${{ steps.flags.outputs.dry_run == 'true' && 'false' || 'true' }}
+
+  publish:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    environment: npm-release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: https://registry.npmjs.org
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+          run_install: false
+
+      - uses: WGB5445/guarded-npm-release-action@v1
+        with:
+          package_dir: .
+          publish_mode: publish
+          expected_tag: ${{ needs.preflight.outputs.expected_tag }}
+          allow_tag_prefix_v: 'true'
+          allow_non_main: 'false'
+          main_branch: main
+          run_tests: 'false'
+          check_version_exists: 'false'
+          require_manual_confirm: ${{ needs.preflight.outputs.require_manual_confirm }}
+          confirm_publish: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_publish || '' }}
+          confirm_version: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_version || '' }}

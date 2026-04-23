@@ -1,0 +1,15 @@
+{
+  "name": "@wgb5445/npm-release-playground",
+  "version": "0.1.0-beta.1",
+  "private": false,
+  "description": "Playground repo for guarded npm release workflow",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WGB5445/npm-release-playground.git"
+  },
+  "scripts": {
+    "build": "echo build-ok",
+    "test": "echo test-ok"
+  },
+  "packageManager": "pnpm@10.11.0"
+}
